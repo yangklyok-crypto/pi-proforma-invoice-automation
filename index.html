@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PI / Proforma Invoice Automation</title>
+  <style>
+    body{font:15px system-ui,sans-serif;background:#f3f6fa;color:#1d2939;margin:0}
+    main{max-width:1000px;margin:28px auto;padding:0 16px} h1{font-size:26px;margin-bottom:4px}
+    .card{background:white;border:1px solid #dce3ec;border-radius:12px;padding:22px;margin:16px 0;box-shadow:0 2px 8px #1d293908}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+    label{display:block;font-weight:600;margin-bottom:5px} input,select{box-sizing:border-box;width:100%;padding:10px;border:1px solid #b9c4d2;border-radius:7px;font:inherit}
+    button{background:#19558a;color:white;border:0;border-radius:7px;padding:10px 16px;font:inherit;cursor:pointer}
+    button.secondary{background:#e6edf4;color:#163d62} button.remove{background:#a33232}
+    .line{display:grid;grid-template-columns:3fr .7fr 1fr 1.3fr auto;gap:8px;align-items:end;margin:10px 0}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.muted{color:#526275}
+    #result,#error{margin-top:15px;white-space:pre-wrap}#error{color:#a33232}
+    @media(max-width:700px){.grid,.line{display:block}.line>*{margin:8px 0}}
+  </style>
+</head>
+<body><main>
+  <h1>PI / Proforma Invoice Automation</h1>
+  <p class="muted">Local demo. Add line items, optionally attach product specification PDFs, then export a proforma invoice.</p>
+  <div class="card"><div class="grid">
+    <div><label for="customer">Customer</label><input id="customer" maxlength="240" required placeholder="Example Buyer"></div>
+    <div><label for="date">Invoice date</label><input id="date" type="date" required></div>
+    <div><label for="currency">Currency</label><select id="currency"><option>NGN</option><option>USD</option></select></div>
+    <div><label for="vat">VAT</label><select id="vat"><option value="no">No VAT</option><option value="yes">7.5% included in quoted prices</option></select></div>
+  </div></div>
+  <div class="card"><h2>Line items</h2><div id="lines"></div>
+    <button id="add" class="secondary" type="button">Add line</button>
+    <div class="actions"><button id="generate" type="button">Generate invoice</button></div>
+    <div id="error" role="alert"></div><div id="result" role="status"></div>
+  </div>
+  <div class="card"><h2>Optional specification PDF</h2>
+    <p class="muted">Upload a generic PDF, then select it on a line. Files remain on this computer. Do not upload confidential product sheets to a public demo.</p>
+    <input id="specFile" type="file" accept="application/pdf,.pdf"><div class="actions"><button id="upload" type="button" class="secondary">Upload PDF</button></div>
+  </div>
+</main><script>
+const lines=document.querySelector('#lines');let specs=[];
+document.querySelector('#date').value=new Date().toISOString().slice(0,10);
+function options(){return '<option value="">No attachment</option>'+specs.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}
+function addLine(){const row=document.createElement('div');row.className='line';row.innerHTML=`<div><label>Description</label><input class="description" maxlength="240" placeholder="Sample Equipment A"></div><div><label>Qty</label><input class="quantity" type="number" min="1" step="1" value="1"></div><div><label>Unit price</label><input class="price" type="number" min="0.01" step="0.01" placeholder="100.00"></div><div><label>Spec PDF</label><select class="spec">${options()}</select></div><button type="button" class="remove">Remove</button>`;row.querySelector('.remove').onclick=()=>row.remove();lines.append(row)}
+document.querySelector('#add').onclick=addLine;addLine();
+async function refreshSpecs(){const r=await fetch('/api/specs');specs=await r.json();document.querySelectorAll('.spec').forEach(el=>{let old=el.value;el.innerHTML=options();el.value=old})}refreshSpecs();
+document.querySelector('#upload').onclick=async()=>{const file=document.querySelector('#specFile').files[0];if(!file)return;const data=new FormData();data.append('file',file);const r=await fetch('/api/specs',{method:'POST',body:data});const body=await r.json();if(!r.ok){document.querySelector('#error').textContent=body.detail;return}await refreshSpecs();document.querySelectorAll('.spec').forEach(el=>el.value=body.id);document.querySelector('#error').textContent=''};
+document.querySelector('#generate').onclick=async()=>{const error=document.querySelector('#error'),result=document.querySelector('#result');error.textContent='';result.textContent='';const payload={customer:document.querySelector('#customer').value,date:document.querySelector('#date').value,currency:document.querySelector('#currency').value,vat_included:document.querySelector('#vat').value==='yes',lines:[...lines.children].map(row=>({description:row.querySelector('.description').value,quantity:Number(row.querySelector('.quantity').value),unit_price:row.querySelector('.price').value,spec_id:row.querySelector('.spec').value||null}))};try{const r=await fetch('/api/invoices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const body=await r.json();if(!r.ok){error.textContent=body.detail;return}const title=document.createElement('span');title.textContent=`${body.number} — ${payload.currency} ${body.total}; included VAT ${body.vat_included}. `;result.append(title);for(const [label,url] of [['PDF',body.pdf],['Excel',body.xlsx]]){const link=document.createElement('a');link.href=url;link.textContent=`Download ${label}`;link.style.marginRight='14px';result.append(link)}}catch(e){error.textContent=String(e)}};
+</script></body></html>
+
