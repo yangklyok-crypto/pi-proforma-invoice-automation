@@ -1,0 +1,11 @@
+{
+  "customer": "Example Buyer",
+  "date": "2026-01-15",
+  "currency": "NGN",
+  "vat_included": true,
+  "lines": [
+    {"description": "Sample Equipment A", "quantity": 2, "unit_price": "1000.00", "spec_id": null},
+    {"description": "Sample Equipment B", "quantity": 1, "unit_price": "250.00", "spec_id": null}
+  ]
+}
+
